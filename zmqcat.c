@@ -123,9 +123,10 @@ int main(int argc, char *argv[]) {
 	char *endpoint = NULL;
 	int bind = 0;
 	int verbose = 0;
+	char *filter = NULL;
 
 	char c;
-	while ((c = getopt(argc, argv, "t:e:bv")) != -1) {
+	while ((c = getopt(argc, argv, "t:e:f:bv")) != -1) {
 		if (c == 't') {
 			if (!strcasecmp(optarg, "pull"))
 				type = ZMQ_PULL;
@@ -136,7 +137,7 @@ int main(int argc, char *argv[]) {
 			else if (!strcasecmp(optarg, "pub"))
 				type = ZMQ_PUB;
 			else if (!strcasecmp(optarg, "sub"))
-				type = ZMQ_PUB;
+				type = ZMQ_SUB;
 		}
 		else if (c == 'e') {
 			endpoint = optarg;
@@ -147,14 +148,18 @@ int main(int argc, char *argv[]) {
 		else if (c == 'v') {
 			verbose = 1;
 		}
+		else if (c == 'f') {
+			filter = strdup(optarg);
+		}
 	}
 
-	if (!endpoint) {
-		fprintf(stderr, "usage: %s [-t type] -e endpoint [-b] [-v]\n", argv[0]);
+	if (!endpoint || !((ZMQ_SUB == type) ^ (NULL == filter))) {
+		fprintf(stderr, "usage: %s [-t type] -e endpoint [-b] [-v] [-f filter]\n", argv[0]);
 		fprintf(stderr, "  -t : PUSH | PULL | REQ | REP | PUB | SUB\n");
 		fprintf(stderr, "  -e : endpoint, e.g. \"tcp://127.0.0.1:5000\"\n");
 		fprintf(stderr, "  -b : bind instead of connect\n");
 		fprintf(stderr, "  -v : verbose output to stderr\n");
+		fprintf(stderr, "  -f : filter, required for SUB\n");
 		return 254;
 	}
 
@@ -181,7 +186,17 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "error %d: %s\n", errno, zmq_strerror(errno));
 		return 1;
 	}
-	
+
+	if (filter != NULL) {
+		printf("setting filter: %s\n", filter);
+		ok = zmq_setsockopt(socket, ZMQ_SUBSCRIBE, filter, strlen(filter));
+		if (-1 == ok) {
+			fprintf(stderr, "error %d setting filter to `%s': %s",
+					errno, filter, zmq_strerror(errno));
+			return 1;
+		}
+	}
+
 	if (verbose)
 		fprintf(stderr, "%s to %s\n", (bind ? "bound" : "connecting"), endpoint);
 
